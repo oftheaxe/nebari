@@ -23,22 +23,23 @@ def get_jupyterhub_session():
         },
         verify=False,
     )
-    xsrf_token_pattern = re.compile(rb'xsrf_token:\s*"([^"]+)"')
-    # Search for the pattern in the code
-    xsrf_token_search = xsrf_token_pattern.search(r.content)
+    assert r.headers.get('Set-Cookie')
+    xsrf_token_found = r.headers['Set-Cookie'].split("_xsrf=")
     xsrf_token = None
-    if xsrf_token_search:
-        xsrf_token = xsrf_token_pattern.search(r.content).group(1).decode()
-    print("*"*100)
-    print(f"r.headers: {r.headers}")
-    print(f"r.content: {r.content}")
+    if xsrf_token_found:
+        xsrf_token = xsrf_token_found[1].split(";")[0]
+    else:
+        print(f"_xsrf token not found in headers: {r} | {r.headers}")
     return session, xsrf_token
 
 
 def get_jupyterhub_token(note="jupyterhub-tests-deployment"):
     session, xsrf_token = get_jupyterhub_session()
+    keycloak_tokens_url = f"https://{constants.NEBARI_HOSTNAME}/hub/api/users/{constants.KEYCLOAK_USERNAME}/tokens"
+    if xsrf_token:
+        keycloak_tokens_url = f"{keycloak_tokens_url}?_xsrf={xsrf_token}"
     r = session.post(
-        f"https://{constants.NEBARI_HOSTNAME}/hub/api/users/{constants.KEYCLOAK_USERNAME}/tokens?_xsrf={xsrf_token}",
+        keycloak_tokens_url,
         headers={
             "Referer": f"https://{constants.NEBARI_HOSTNAME}/hub/token",
         },
@@ -47,7 +48,10 @@ def get_jupyterhub_token(note="jupyterhub-tests-deployment"):
             "expires_in": None,
         },
     )
-    print(f"get_jupyterhub_token response: {r}, {r.content}")
+    rjson = r.json()
+    if "token" not in rjson:
+        print(f"get_jupyterhub_token response: {r}, {r.content}")
+        raise AssertionError(f"Token not in response: {rjson}")
     return r.json()["token"]
 
 
