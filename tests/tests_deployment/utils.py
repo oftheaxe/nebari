@@ -23,13 +23,16 @@ def get_jupyterhub_session():
         },
         verify=False,
     )
-    return session
+    xsrf_token_pattern = re.compile(rb'xsrf_token:\s*"([^"]+)"')
+    # Search for the pattern in the code
+    xsrf_token = xsrf_token_pattern.search(r.content).group(1).decode()
+    return session, xsrf_token
 
 
 def get_jupyterhub_token(note="jupyterhub-tests-deployment"):
-    session = get_jupyterhub_session()
+    session, xsrf_token = get_jupyterhub_session()
     r = session.post(
-        f"https://{constants.NEBARI_HOSTNAME}/hub/api/users/{constants.KEYCLOAK_USERNAME}/tokens",
+        f"https://{constants.NEBARI_HOSTNAME}/hub/api/users/{constants.KEYCLOAK_USERNAME}/tokens?_xsrf={xsrf_token}",
         headers={
             "Referer": f"https://{constants.NEBARI_HOSTNAME}/hub/token",
         },
