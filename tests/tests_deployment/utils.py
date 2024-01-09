@@ -25,7 +25,13 @@ def get_jupyterhub_session():
     )
     xsrf_token_pattern = re.compile(rb'xsrf_token:\s*"([^"]+)"')
     # Search for the pattern in the code
-    xsrf_token = xsrf_token_pattern.search(r.content).group(1).decode()
+    xsrf_token_search = xsrf_token_pattern.search(r.content)
+    xsrf_token = None
+    if xsrf_token_search:
+        xsrf_token = xsrf_token_pattern.search(r.content).group(1).decode()
+    print("*"*100)
+    print(f"r.headers: {r.headers}")
+    print(f"r.content: {r.content}")
     return session, xsrf_token
 
 
@@ -41,6 +47,7 @@ def get_jupyterhub_token(note="jupyterhub-tests-deployment"):
             "expires_in": None,
         },
     )
+    print(f"get_jupyterhub_token response: {r}, {r.content}")
     return r.json()["token"]
 
 
