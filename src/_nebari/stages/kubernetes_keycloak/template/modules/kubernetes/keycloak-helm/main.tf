@@ -2,12 +2,12 @@ resource "helm_release" "keycloak" {
   name      = "keycloak"
   namespace = var.namespace
 
-  repository = "https://codecentric.github.io/helm-charts"
+  repository = "https://charts.bitnami.com/bitnami"
   chart      = "keycloak"
-  version    = "15.0.2"
+  version    = "23.0.5"
 
   values = concat([
-    # https://github.com/codecentric/helm-charts/blob/keycloak-15.0.2/charts/keycloak/values.yaml
+    # https://github.com/bitnami/charts/blob/main/bitnami/keycloak/values.yaml
     file("${path.module}/values.yaml"),
     jsonencode({
       nodeSelector = {
