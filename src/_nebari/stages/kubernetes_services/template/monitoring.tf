@@ -12,7 +12,8 @@ module "monitoring" {
   realm_id             = var.realm_id
   jupyterhub_api_token = module.jupyterhub.services.monitoring.api_token
 
-  node-group = var.node_groups.general
+  node-group                = var.node_groups.general
+  grafana-grafana-overrides = var.grafana-grafana-overrides
 }
 
 module "grafana-loki" {

@@ -40,7 +40,7 @@ variable "node-group" {
 }
 
 
-variable "overrides" {
+variable "grafana-grafana-overrides" {
   description = "Grafana helm chart overrides"
   type        = list(string)
   default     = []

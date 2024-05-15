@@ -206,12 +206,20 @@ resource "helm_release" "prometheus-grafana" {
           }
         }
 
+        plugins = [
+          "https://github.com/michelin/snowflake-grafana-datasource/releases/latest/download/snowflake-grafana-datasource.zip;michelin-snowflake-datasource"
+        ]
+
         "grafana.ini" : {
           server = {
             protocol            = "http"
             domain              = var.external-url
             root_url            = "https://%(domain)s/monitoring"
             serve_from_sub_path = "true"
+          }
+
+          plugins = {
+            "allow_loading_unsigned_plugins" = "michelin-snowflake-datasource"
           }
 
           auth = {
@@ -235,7 +243,7 @@ resource "helm_release" "prometheus-grafana" {
         }
       }
     })
-  ], var.overrides)
+  ], var.grafana-grafana-overrides)
 }
 
 
