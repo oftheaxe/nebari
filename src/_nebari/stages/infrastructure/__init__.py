@@ -153,25 +153,25 @@ def _calculate_asg_node_group_map(config: schema.Main):
 
 
 def _calculate_node_groups(config: schema.Main):
+    node_groups = ["general", "user", "worker", "conda-store"]
     if config.provider == schema.ProviderEnum.aws:
         return {
             group: {"key": "eks.amazonaws.com/nodegroup", "value": group}
-            for group in ["general", "user", "worker"]
+            for group in node_groups
         }
     elif config.provider == schema.ProviderEnum.gcp:
         return {
             group: {"key": "cloud.google.com/gke-nodepool", "value": group}
-            for group in ["general", "user", "worker"]
+            for group in node_groups
         }
     elif config.provider == schema.ProviderEnum.azure:
         return {
-            group: {"key": "azure-node-pool", "value": group}
-            for group in ["general", "user", "worker"]
+            group: {"key": "azure-node-pool", "value": group} for group in node_groups
         }
     elif config.provider == schema.ProviderEnum.do:
         return {
             group: {"key": "doks.digitalocean.com/node-pool", "value": group}
-            for group in ["general", "user", "worker"]
+            for group in node_groups
         }
     elif config.provider == schema.ProviderEnum.existing:
         return config.existing.node_selectors
@@ -227,6 +227,9 @@ DEFAULT_DO_NODE_GROUPS = {
     "general": DigitalOceanNodeGroup(instance="g-8vcpu-32gb", min_nodes=1, max_nodes=5),
     "user": DigitalOceanNodeGroup(instance="g-4vcpu-16gb", min_nodes=1, max_nodes=5),
     "worker": DigitalOceanNodeGroup(instance="g-4vcpu-16gb", min_nodes=1, max_nodes=5),
+    "conda-store": DigitalOceanNodeGroup(
+        instance="g-4vcpu-16gb", min_nodes=1, max_nodes=5
+    ),
 }
 
 
@@ -318,6 +321,7 @@ DEFAULT_GCP_NODE_GROUPS = {
     "general": GCPNodeGroup(instance="e2-highmem-4", min_nodes=1, max_nodes=5),
     "user": GCPNodeGroup(instance="e2-standard-4", min_nodes=0, max_nodes=5),
     "worker": GCPNodeGroup(instance="e2-standard-4", min_nodes=0, max_nodes=5),
+    "conda-store": GCPNodeGroup(instance="e2-standard-4", min_nodes=0, max_nodes=5),
 }
 
 
@@ -365,6 +369,7 @@ DEFAULT_AZURE_NODE_GROUPS = {
     "general": AzureNodeGroup(instance="Standard_D8_v3", min_nodes=1, max_nodes=1),
     "user": AzureNodeGroup(instance="Standard_D4_v3", min_nodes=0, max_nodes=5),
     "worker": AzureNodeGroup(instance="Standard_D4_v3", min_nodes=0, max_nodes=5),
+    "conda-store": AzureNodeGroup(instance="Standard_D4_v3", min_nodes=0, max_nodes=5),
 }
 
 
@@ -443,6 +448,9 @@ DEFAULT_AWS_NODE_GROUPS = {
     "worker": AWSNodeGroup(
         instance="m5.xlarge", min_nodes=0, max_nodes=5, single_subnet=False
     ),
+    "conda-store": AWSNodeGroup(
+        instance="m5.xlarge", min_nodes=0, max_nodes=5, single_subnet=False
+    ),
 }
 
 
@@ -515,6 +523,7 @@ class LocalProvider(schema.Base):
         "general": KeyValueDict(key="kubernetes.io/os", value="linux"),
         "user": KeyValueDict(key="kubernetes.io/os", value="linux"),
         "worker": KeyValueDict(key="kubernetes.io/os", value="linux"),
+        "conda-store": KeyValueDict(key="kubernetes.io/os", value="linux"),
     }
 
 
@@ -524,6 +533,7 @@ class ExistingProvider(schema.Base):
         "general": KeyValueDict(key="kubernetes.io/os", value="linux"),
         "user": KeyValueDict(key="kubernetes.io/os", value="linux"),
         "worker": KeyValueDict(key="kubernetes.io/os", value="linux"),
+        "conda-store": KeyValueDict(key="kubernetes.io/os", value="linux"),
     }
 
 
