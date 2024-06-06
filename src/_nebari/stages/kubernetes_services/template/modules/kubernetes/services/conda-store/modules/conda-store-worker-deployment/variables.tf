@@ -39,6 +39,21 @@ variable "conda_store_worker_resources" {
   })
 }
 
+variable "deployment-annotations" {
+  description = "Deployment annotations."
+  type        = map(string)
+}
+
+
+variable "conda-store-worker-volumes" {
+  type = list(object({
+    name            = string
+    config_map_name = optional(string)
+    secret_name     = optional(string)
+    claim_name      = optional(string)
+  }))
+}
+
 variable "keda-scaling-query" {
   description = "Keda scaling query."
   type        = string
@@ -49,5 +64,7 @@ variable "keda-target-query-value" {
   type        = number
 }
 
-
-# "SELECT GREATEST(COUNT(*)-1, 0) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
+variable "max-worker-replica-count" {
+  description = "Max worker replica count."
+  type        = number
+}

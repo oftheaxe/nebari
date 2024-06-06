@@ -53,6 +53,36 @@ resource "kubernetes_config_map" "conda-store-environments" {
   data = var.environments
 }
 
+locals {
+  conda-store-worker-volumes = [
+    {
+      name            = "config"
+      config_map_name = kubernetes_config_map.conda-store-config.metadata.0.name
+    },
+    {
+      name        = "secret"
+      secret_name = kubernetes_secret.conda-store-secret.metadata.0.name
+    },
+    {
+      name            = "environments"
+      config_map_name = kubernetes_config_map.conda-store-environments.metadata.0.name
+    },
+    {
+      name = "storage"
+      # on AWS the pvc gets stuck in a provisioning state if we
+      # directly reference the pvc may no longer be issue in
+      # future
+      claim_name = kubernetes_persistent_volume_claim.main.metadata.0.name
+    }
+  ]
+
+  deployment-annotations = {
+    "checksum/config-map"         = sha256(jsonencode(kubernetes_config_map.conda-store-config.data))
+    "checksum/secret"             = sha256(jsonencode(kubernetes_secret.conda-store-secret.data))
+    "checksum/conda-environments" = sha256(jsonencode(kubernetes_config_map.conda-store-environments.data))
+  }
+}
+
 # runs on general node for fast response
 module "general-conda-store-worker-deployment" { # TODO: grab general from a variable
   source = "./modules/conda-store-worker-deployment"
@@ -60,15 +90,18 @@ module "general-conda-store-worker-deployment" { # TODO: grab general from a var
   name      = "${var.name}-general-conda-store-worker" # TODO: grab general from a variable
   namespace = var.namespace
 
-  node_group = var.node_group # TODO: grab general from a variable
+  node_group = var.node-group # TODO: grab general from a variable
 
-  conda_store_image            = var.conda_store_image
-  conda_store_image_tag        = var.conda_store_image_tag
-  conda_store_worker_resources = var.conda_store_worker_resources
+  conda_store_image            = var.conda-store-image
+  conda_store_image_tag        = var.conda-store-image-tag
+  conda_store_worker_resources = var.conda-store-worker-resources
 
   max-worker-replica-count = 1
   keda-scaling-query       = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
   keda-target-query-value  = 0
+
+  conda-store-worker-volumes = local.conda-store-worker-volumes
+  deployment-annotations     = local.deployment-annotations
 
   depends_on = [
     kubernetes_manifest.triggerauthenticator
@@ -82,15 +115,18 @@ module "scaling-conda-store-worker-deployment" {
   name      = "${var.name}-scaling-conda-store-worker"
   namespace = var.namespace
 
-  node_group = var.node_group
+  node_group = var.node-group
 
-  conda_store_image            = var.conda_store_image
-  conda_store_image_tag        = var.conda_store_image_tag
-  conda_store_worker_resources = var.conda_store_worker_resources
+  conda_store_image            = var.conda-store-image
+  conda_store_image_tag        = var.conda-store-image-tag
+  conda_store_worker_resources = var.conda-store-worker-resources
 
-  max-worker-replica-count = var.max-worker-replica-count-1
+  max-worker-replica-count = var.max-worker-replica-count - 1
   keda-scaling-query       = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
   keda-target-query-value  = 1
+
+  conda-store-worker-volumes = local.conda-store-worker-volumes
+  deployment-annotations     = local.deployment-annotations
 
   depends_on = [
     kubernetes_manifest.triggerauthenticator
@@ -271,9 +307,6 @@ resource "kubernetes_manifest" "triggerauthenticator" {
       ]
     }
   }
-  depends_on = [
-    kubernetes_deployment.worker
-  ]
 }
 
 # resource "kubernetes_manifest" "scaledobject" {

@@ -21,12 +21,7 @@ resource "kubernetes_deployment" "worker" {
         labels = {
           role = var.name
         }
-
-        annotations = {
-          "checksum/config-map"         = sha256(jsonencode(kubernetes_config_map.conda-store-config.data))
-          "checksum/secret"             = sha256(jsonencode(kubernetes_secret.conda-store-secret.data))
-          "checksum/conda-environments" = sha256(jsonencode(kubernetes_config_map.conda-store-environments.data))
-        }
+        annotations = var.deployment-annotations
       }
 
       spec {
@@ -110,31 +105,31 @@ resource "kubernetes_deployment" "worker" {
           }
         }
 
-        volume {
-          name = "config"
-          config_map {
-            name = kubernetes_config_map.conda-store-config.metadata.0.name
-          }
-        }
+        dynamic "volume" {
+          for_each = var.conda-store-worker-volumes
+          content {
+            name = volume.value.name
 
-        volume {
-          name = "secret"
-          secret {
-            secret_name = kubernetes_secret.conda-store-secret.metadata.0.name
-          }
-        }
+            dynamic "config_map" {
+              for_each = volume.value.config_map_name != null ? [1] : []
+              content {
+                name = volume.value.config_map_name
+              }
+            }
 
-        volume {
-          name = "environments"
-          config_map {
-            name = kubernetes_config_map.conda-store-environments.metadata.0.name
-          }
-        }
+            dynamic "secret" {
+              for_each = volume.value.secret_name != null ? [1] : []
+              content {
+                secret_name = volume.value.secret_name
+              }
+            }
 
-        volume {
-          name = "storage"
-          persistent_volume_claim {
-            claim_name = "${var.name}-conda-store-storage"
+            dynamic "persistent_volume_claim" {
+              for_each = volume.value.claim_name != null ? [1] : []
+              content {
+                claim_name = volume.value.claim_name
+              }
+            }
           }
         }
 
