@@ -74,11 +74,12 @@ resource "kubernetes_manifest" "triggerauthenticator" {
     }
   }
   depends_on = [
-    kubernetes_deployment.worker
+    kubernetes_deployment.general-worker,
+    kubernetes_deployment.autoscaling-worker
   ]
 }
 
-# conda store worker deployment on the general node
+# conda store worker deployment on the general node for fast response
 resource "kubernetes_deployment" "general-worker" {
   metadata {
     name      = "${var.name}-conda-store-worker"
@@ -233,13 +234,13 @@ resource "kubernetes_deployment" "general-worker" {
 }
 
 
-resource "kubernetes_manifest" "scaledobject" {
+resource "kubernetes_manifest" "general-scaledobject" {
   manifest = {
     apiVersion = "keda.sh/v1alpha1"
     kind       = "ScaledObject"
 
     metadata = {
-      name      = "scaled-conda-worker"
+      name      = "general-conda-worker"
       namespace = var.namespace
     }
 
@@ -248,7 +249,7 @@ resource "kubernetes_manifest" "scaledobject" {
         kind = "Deployment"
         name = "nebari-conda-store-worker"
       }
-      maxReplicaCount = var.max-worker-replica-count
+      maxReplicaCount = 1
       pollingInterval = 5
       cooldownPeriod  = 5
       triggers = [
@@ -256,7 +257,7 @@ resource "kubernetes_manifest" "scaledobject" {
           type = "postgresql"
           metadata = {
             query            = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
-            targetQueryValue = "1"
+            targetQueryValue = "0"
             host             = "nebari-conda-store-postgresql"
             userName         = "postgres"
             port             = "5432"
@@ -271,7 +272,7 @@ resource "kubernetes_manifest" "scaledobject" {
     }
   }
   depends_on = [
-    kubernetes_deployment.worker,
+    kubernetes_deployment.general-worker,
     kubernetes_manifest.triggerauthenticator
   ]
 }
@@ -431,13 +432,13 @@ resource "kubernetes_deployment" "autoscaling-worker" {
 }
 
 
-resource "kubernetes_manifest" "scaledobject" {
+resource "kubernetes_manifest" "autoscaling-scaledobject" {
   manifest = {
     apiVersion = "keda.sh/v1alpha1"
     kind       = "ScaledObject"
 
     metadata = {
-      name      = "scaled-conda-worker"
+      name      = "autoscaling-conda-worker"
       namespace = var.namespace
     }
 
@@ -446,7 +447,7 @@ resource "kubernetes_manifest" "scaledobject" {
         kind = "Deployment"
         name = "nebari-conda-store-worker"
       }
-      maxReplicaCount = var.max-worker-replica-count
+      maxReplicaCount = var.max-worker-replica-count - 1
       pollingInterval = 5
       cooldownPeriod  = 5
       triggers = [
@@ -469,7 +470,7 @@ resource "kubernetes_manifest" "scaledobject" {
     }
   }
   depends_on = [
-    kubernetes_deployment.worker,
+    kubernetes_deployment.autoscaling-worker,
     kubernetes_manifest.triggerauthenticator
   ]
 }
