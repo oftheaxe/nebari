@@ -35,6 +35,7 @@ resource "kubernetes_persistent_volume_claim" "main" {
 
   spec {
     access_modes = ["ReadWriteOnce"]
+    # access_modes = ["ReadWriteMany"]
     resources {
       requests = {
         storage = var.nfs_capacity
@@ -75,7 +76,7 @@ resource "kubernetes_manifest" "triggerauthenticator" {
   }
   depends_on = [
     kubernetes_deployment.general-worker,
-    kubernetes_deployment.autoscaling-worker
+    # kubernetes_deployment.autoscaling-worker
   ]
 }
 
@@ -249,15 +250,15 @@ resource "kubernetes_manifest" "general-scaledobject" {
         kind = "Deployment"
         name = "nebari-conda-store-worker"
       }
-      maxReplicaCount = 1
+      maxReplicaCount = 105 # 1
       pollingInterval = 5
       cooldownPeriod  = 5
       triggers = [
         {
           type = "postgresql"
           metadata = {
-            query            = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
-            targetQueryValue = "0"
+            query            = "SELECT COUNT(*) + 10 FROM build WHERE status IN ('QUEUED', 'BUILDING');"
+            targetQueryValue = "1"
             host             = "nebari-conda-store-postgresql"
             userName         = "postgres"
             port             = "5432"
@@ -277,200 +278,200 @@ resource "kubernetes_manifest" "general-scaledobject" {
   ]
 }
 
-# conda store worker deployment on the dedicated node group for autoscaling
-resource "kubernetes_deployment" "autoscaling-worker" {
-  metadata {
-    name      = "${var.name}-conda-store-autoscaling-workers"
-    namespace = var.namespace
-    labels = {
-      role = "${var.name}-conda-store-worker"
-    }
-  }
+# # conda store worker deployment on the dedicated node group for autoscaling
+# resource "kubernetes_deployment" "autoscaling-worker" {
+#   metadata {
+#     name      = "${var.name}-conda-store-autoscaling-workers"
+#     namespace = var.namespace
+#     labels = {
+#       role = "${var.name}-conda-store-worker"
+#     }
+#   }
 
-  spec {
-    replicas = 1
+#   spec {
+#     replicas = 1
 
-    selector {
-      match_labels = {
-        role = "${var.name}-conda-store-worker"
-      }
-    }
+#     selector {
+#       match_labels = {
+#         role = "${var.name}-conda-store-worker"
+#       }
+#     }
 
-    template {
-      metadata {
-        labels = {
-          role = "${var.name}-conda-store-worker"
-        }
+#     template {
+#       metadata {
+#         labels = {
+#           role = "${var.name}-conda-store-worker"
+#         }
 
-        annotations = {
-          # This lets us autorestart when the config changes!
-          "checksum/config-map"         = sha256(jsonencode(kubernetes_config_map.conda-store-config.data))
-          "checksum/secret"             = sha256(jsonencode(kubernetes_secret.conda-store-secret.data))
-          "checksum/conda-environments" = sha256(jsonencode(kubernetes_config_map.conda-store-environments.data))
-        }
-      }
+#         annotations = {
+#           # This lets us autorestart when the config changes!
+#           "checksum/config-map"         = sha256(jsonencode(kubernetes_config_map.conda-store-config.data))
+#           "checksum/secret"             = sha256(jsonencode(kubernetes_secret.conda-store-secret.data))
+#           "checksum/conda-environments" = sha256(jsonencode(kubernetes_config_map.conda-store-environments.data))
+#         }
+#       }
 
-      spec {
-        affinity {
-          node_affinity {
-            required_during_scheduling_ignored_during_execution {
-              node_selector_term {
-                match_expressions {
-                  key      = var.node-group.key
-                  operator = "In"
-                  values = [
-                    var.node-group.value
-                  ]
-                }
-              }
-            }
-          }
-        }
+#       spec {
+#         affinity {
+#           node_affinity {
+#             required_during_scheduling_ignored_during_execution {
+#               node_selector_term {
+#                 match_expressions {
+#                   key      = var.node-group.key
+#                   operator = "In"
+#                   values = [
+#                     var.node-group.value
+#                   ]
+#                 }
+#               }
+#             }
+#           }
+#         }
 
-        container {
-          name  = "conda-store-worker"
-          image = "${var.conda-store-image}:${var.conda-store-image-tag}"
+#         container {
+#           name  = "conda-store-worker"
+#           image = "${var.conda-store-image}:${var.conda-store-image-tag}"
 
-          args = [
-            "conda-store-worker",
-            "--config",
-            "/etc/conda-store/conda_store_config.py"
-          ]
+#           args = [
+#             "conda-store-worker",
+#             "--config",
+#             "/etc/conda-store/conda_store_config.py"
+#           ]
 
-          resources {
-            requests = var.conda-store-worker-resources["requests"]
-          }
+#           resources {
+#             requests = var.conda-store-worker-resources["requests"]
+#           }
 
-          volume_mount {
-            name       = "config"
-            mount_path = "/etc/conda-store"
-          }
+#           volume_mount {
+#             name       = "config"
+#             mount_path = "/etc/conda-store"
+#           }
 
-          volume_mount {
-            name       = "environments"
-            mount_path = "/opt/environments"
-          }
+#           volume_mount {
+#             name       = "environments"
+#             mount_path = "/opt/environments"
+#           }
 
-          volume_mount {
-            name       = "storage"
-            mount_path = "/home/conda"
-          }
+#           volume_mount {
+#             name       = "storage"
+#             mount_path = "/home/conda"
+#           }
 
-          volume_mount {
-            name       = "secret"
-            mount_path = "/var/lib/conda-store/"
-          }
-        }
+#           volume_mount {
+#             name       = "secret"
+#             mount_path = "/var/lib/conda-store/"
+#           }
+#         }
 
-        container {
-          name  = "nfs-server"
-          image = "gcr.io/google_containers/volume-nfs:0.8"
+#         container {
+#           name  = "nfs-server"
+#           image = "gcr.io/google_containers/volume-nfs:0.8"
 
-          port {
-            name           = "nfs"
-            container_port = 2049
-          }
+#           port {
+#             name           = "nfs"
+#             container_port = 2049
+#           }
 
-          port {
-            name           = "mountd"
-            container_port = 20048
-          }
+#           port {
+#             name           = "mountd"
+#             container_port = 20048
+#           }
 
-          port {
-            name           = "rpcbind"
-            container_port = 111
-          }
+#           port {
+#             name           = "rpcbind"
+#             container_port = 111
+#           }
 
-          security_context {
-            privileged = true
-          }
+#           security_context {
+#             privileged = true
+#           }
 
-          volume_mount {
-            mount_path = "/exports"
-            name       = "storage"
-          }
-        }
+#           volume_mount {
+#             mount_path = "/exports"
+#             name       = "storage"
+#           }
+#         }
 
-        volume {
-          name = "config"
-          config_map {
-            name = kubernetes_config_map.conda-store-config.metadata.0.name
-          }
-        }
+#         volume {
+#           name = "config"
+#           config_map {
+#             name = kubernetes_config_map.conda-store-config.metadata.0.name
+#           }
+#         }
 
-        volume {
-          name = "secret"
-          secret {
-            secret_name = kubernetes_secret.conda-store-secret.metadata.0.name
-          }
-        }
+#         volume {
+#           name = "secret"
+#           secret {
+#             secret_name = kubernetes_secret.conda-store-secret.metadata.0.name
+#           }
+#         }
 
-        volume {
-          name = "environments"
-          config_map {
-            name = kubernetes_config_map.conda-store-environments.metadata.0.name
-          }
-        }
+#         volume {
+#           name = "environments"
+#           config_map {
+#             name = kubernetes_config_map.conda-store-environments.metadata.0.name
+#           }
+#         }
 
-        volume {
-          name = "storage"
-          persistent_volume_claim {
-            # on AWS the pvc gets stuck in a provisioning state if we
-            # directly reference the pvc may no longer be issue in
-            # future
-            # claim_name = kubernetes_persistent_volume_claim.main.metadata.0.name
-            claim_name = "${var.name}-conda-store-storage"
-          }
-        }
-        security_context {
-          run_as_group = 0
-          run_as_user  = 0
-        }
-      }
-    }
-  }
-}
+#         volume {
+#           name = "storage"
+#           persistent_volume_claim {
+#             # on AWS the pvc gets stuck in a provisioning state if we
+#             # directly reference the pvc may no longer be issue in
+#             # future
+#             # claim_name = kubernetes_persistent_volume_claim.main.metadata.0.name
+#             claim_name = "${var.name}-conda-store-storage"
+#           }
+#         }
+#         security_context {
+#           run_as_group = 0
+#           run_as_user  = 0
+#         }
+#       }
+#     }
+#   }
+# }
 
 
-resource "kubernetes_manifest" "autoscaling-scaledobject" {
-  manifest = {
-    apiVersion = "keda.sh/v1alpha1"
-    kind       = "ScaledObject"
+# resource "kubernetes_manifest" "autoscaling-scaledobject" {
+#   manifest = {
+#     apiVersion = "keda.sh/v1alpha1"
+#     kind       = "ScaledObject"
 
-    metadata = {
-      name      = "autoscaling-conda-worker"
-      namespace = var.namespace
-    }
+#     metadata = {
+#       name      = "autoscaling-conda-worker"
+#       namespace = var.namespace
+#     }
 
-    spec = {
-      scaleTargetRef = {
-        kind = "Deployment"
-        name = "nebari-conda-store-worker"
-      }
-      maxReplicaCount = var.max-worker-replica-count - 1
-      pollingInterval = 5
-      cooldownPeriod  = 5
-      triggers = [
-        {
-          type = "postgresql"
-          metadata = {
-            query            = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
-            targetQueryValue = "1"
-            host             = "nebari-conda-store-postgresql"
-            userName         = "postgres"
-            port             = "5432"
-            dbName           = "conda-store"
-            sslmode          = "disable"
-          }
-          authenticationRef = {
-            name = "trigger-auth-postgres"
-          }
-        }
-      ]
-    }
-  }
-  depends_on = [
-    kubernetes_deployment.autoscaling-worker,
-    kubernetes_manifest.triggerauthenticator
-  ]
-}
+#     spec = {
+#       scaleTargetRef = {
+#         kind = "Deployment"
+#         name = "nebari-conda-store-worker"
+#       }
+#       maxReplicaCount = var.max-worker-replica-count - 1
+#       pollingInterval = 5
+#       cooldownPeriod  = 5
+#       triggers = [
+#         {
+#           type = "postgresql"
+#           metadata = {
+#             query            = "SELECT COUNT(*) FROM build WHERE status IN ('QUEUED', 'BUILDING');"
+#             targetQueryValue = "1"
+#             host             = "nebari-conda-store-postgresql"
+#             userName         = "postgres"
+#             port             = "5432"
+#             dbName           = "conda-store"
+#             sslmode          = "disable"
+#           }
+#           authenticationRef = {
+#             name = "trigger-auth-postgres"
+#           }
+#         }
+#       ]
+#     }
+#   }
+#   depends_on = [
+#     kubernetes_deployment.autoscaling-worker,
+#     kubernetes_manifest.triggerauthenticator
+#   ]
+# }
